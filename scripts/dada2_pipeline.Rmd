@@ -6,6 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+#TODO: make figures prettier
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -14,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, echo=FALSE}
 setwd(this.path::here())
 library(dada2)
+library(ggplot2)
+library(tidyverse)
 ```
 
 ## Data Retrieval
@@ -23,21 +26,22 @@ path <- "../data/raw_fastq/unzipped" # directory containing the unzipped fastq f
 list.files(path)
 fastqs <- sort(list.files(path,  pattern=".fastq", full.names = TRUE))
 # Extract sample names
-sample.names <- sapply(strsplit(basename(fastqs), "\\."), `[`, 1)
+sample_names <- sapply(strsplit(basename(fastqs), "\\."), `[`, 1)
 ```
 
 ## Read Quality Profiles
 
 ```{r}
-plotQualityProfile(fastqs[1:2])
+qual_profs<-plotQualityProfile(fastqs)
+qual_profs
 ```
 
 ## Filter and Trim
 
 ```{r}
 # Place filtered files in filtered/ subdirectory
-filts <- file.path(path, "filtered", paste0(sample.names, "_filt.fastq.gz"))
-names(filts) <- sample.names
+filts <- file.path(path, "filtered", paste0(sample_names, "_filt.fastq.gz"))
+names(filts) <- sample_names
 
 #trunclen determined by previous multiqc and quality profile
 #TODO : play w maxEE and trunclen
@@ -54,7 +58,8 @@ err <- learnErrors(filts)
 ```
 ```{r}
 #visualize estimated error rates
-plotErrors(err, nominalQ=TRUE)
+err_plot <- plotErrors(err, nominalQ=TRUE)
+err_plot
 ```
 
 ## Sample Inference
@@ -71,27 +76,178 @@ dim(seqtab)
 ```
 ```{r}
 # Inspect distribution of sequence lengths
-table(nchar(getSequences(seqtab)))
+table(nchar(getSequences(seqtab))) #indicates all sequences are the exact same length, 250
 ```
 
 ## Remove Chimeras
 ```{r}
-seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", verbose=TRUE)
-dim(seqtab.nochim)
+seqtab_nochim <- removeBimeraDenovo(seqtab, method="consensus", verbose=TRUE)
+dim(seqtab_nochim)
 #proportion on nonchimera reads
-sum(seqtab.nochim)/sum(seqtab)
+sum(seqtab_nochim)/sum(seqtab)
 ```
+
+## Sequencing Depth Distribution
+```{r}
+#reads per sample
+sample_depth <- rowSums(seqtab_nochim)
+head(sample_depth)
+summary(sample_depth)
+#convert to dataframe
+depth_df <- data.frame(
+  Sample = names(sample_depth),
+  Reads = sample_depth
+)
+#plot
+seq_depth_plot <- ggplot(depth_df, aes(x = Sample, y = Reads)) +
+  geom_col() +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  ) +
+  labs(
+    x = "Sample",
+    y = "Reads after chimera removal",
+    title = "Sequencing Depth per Sample"
+  )
+seq_depth_plot
+```
+
 
 ## Track Reads Through the Pipeline
 
 ```{r}
 getN <- function(x) sum(getUniques(x))
-track <- cbind(out, sapply(dadas, getN), rowSums(seqtab.nochim))
+track <- cbind(out, sapply(dadas, getN), rowSums(seqtab_nochim))
 
 colnames(track) <- c("input", "filtered", "denoised", "nonchim")
-rownames(track) <- sample.names
+rownames(track) <- sample_names
 head(track)
 ```
 
+Visualize
+```{r}
+#convert into long format
+track_long <- track |>
+  as.data.frame() |>
+  tibble::rownames_to_column("Sample") |>
+  pivot_longer(
+    cols = -Sample,
+    names_to = "Step",
+    values_to = "Reads"
+  )
+
+#calculate avg number of reads retained
+track_summary <- track_long |>
+  group_by(Step) |>
+  summarize(
+    MeanReads = mean(Reads),
+    SD = sd(Reads)
+  )
+
+#order the steps correctly
+track_summary$Step <- factor(
+  track_summary$Step,
+  levels = c("input", "filtered", "denoised", "nonchim")
+)
+
+#plot
+retention_bar <- ggplot(track_summary, aes(x = Step, y = MeanReads)) +
+  geom_col() +
+  geom_errorbar(
+    aes(ymin = MeanReads - SD, ymax = MeanReads + SD),
+    width = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Pipeline Step",
+    y = "Mean Reads",
+    title = "Read Retention Through DADA2 Pipeline"
+  )
+
+#add percentages
+track_summary <- track_summary %>%
+  mutate(PercentRetained = MeanReads / MeanReads[Step == "input"] * 100)
+#plot
+retention_per_bar <- ggplot(track_summary, aes(x = Step, y = PercentRetained)) +
+  geom_col() +
+  geom_errorbar(
+    aes(
+      ymin = (MeanReads - SD) / MeanReads[Step == "input"] * 100,
+      ymax = (MeanReads + SD) / MeanReads[Step == "input"] * 100
+    ),
+    width = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Pipeline Step",
+    y = "Reads Retained (%)",
+    title = "DADA2 Read Retention"
+  )
+retention_bar
+retention_per_bar
+```
+
+
 ## Assign Taxonomy
 I use the RDP reference database, to match what was used by the original authors.
+```{r}
+taxa <- assignTaxonomy(seqtab_nochim, "../data/raw_fastq/unzipped/tax/rdp_19_toGenus_trainset.fa.gz") #genus
+```
+Inspect taxonomic assignments
+```{r}
+taxa_print <- taxa # Removing sequence rownames for display only
+rownames(taxa_print) <- NULL
+head(taxa_print)
+```
+visualize
+```{r}
+tax_summary <- data.frame(
+  Rank = colnames(taxa),
+  Assigned = colSums(!is.na(taxa)),
+  Total = nrow(taxa)
+)
+
+tax_summary$Percent <- tax_summary$Assigned / tax_summary$Total * 100
+
+#order the steps correctly
+tax_summary$Rank <- factor(
+  tax_summary$Rank,
+  levels = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+)
+
+taxa_assign_plot <- ggplot(tax_summary, aes(x = Rank, y = Percent)) +
+  geom_col() +
+  theme_minimal() +
+  labs(
+    x = "Taxonomic Rank",
+    y = "ASVs Assigned (%)",
+    title = "Taxonomic Assignment Summary"
+  )
+taxa_assign_plot
+```
+
+
+## Save Results
+
+```{r}
+#asv table
+saveRDS(seqtab_nochim, "../results/dada2/seqtab_nochim.rds")
+write.csv(seqtab_nochim, "../results/dada2/asv_table.csv")
+
+#taxonomy table
+saveRDS(taxa, "../results/taxonomy/taxonomy.rds")
+write.csv(taxa, "../results/taxonomy/taxonomy.csv")
+
+#read tracker
+saveRDS(track, "../results/dada2/track_reads.rds")
+write.csv(track, "../results/dada2/track_reads.csv")
+
+#visuals
+ggsave("../results/dada2/quality_profiles.png", plot= qual_profs, width = 12, height = 10, units = "in",)
+ggsave("../results/dada2/retention_bar.png", plot= retention_bar)
+ggsave("../results/dada2/retention_percent_bar.png", plot= retention_per_bar)
+ggsave("../results/dada2/sequencing_depth_distibution.png", plot= seq_depth_plot)
+ggsave("../results/taxonomy/taxa_assignment_percent.png", plot= taxa_assign_plot)
+```
+
