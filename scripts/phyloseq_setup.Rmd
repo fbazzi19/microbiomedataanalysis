@@ -1,0 +1,96 @@
+---
+title: "Phyloseq Setup"
+author: "Fateema Bazzi"
+date: "2026-08-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load in Libraries and Set Working Directory
+
+```{r, include=FALSE}
+setwd(this.path::here())
+
+library(tidyverse)
+library(dada2)
+library(DECIPHER)
+library(phangorn)
+library(Biostrings)
+library(ape)
+library(phyloseq)
+library(dplyr)
+```
+
+## Load in Data
+
+```{r}
+#asv table
+seqtab_nochim <- readRDS("../results/dada2/seqtab_nochim.rds")
+#taxonomy table
+taxa <- readRDS("../results/taxonomy/taxonomy.rds")
+
+```
+
+Clean metadata
+```{r}
+#metadata
+meta <- read.csv("../data/metadata/italiantable.csv", header = FALSE)
+
+#get rid of columns that aren't needed
+meta <- meta[,c(1,14)]
+colnames(meta)<-c("Sample", "Location")
+
+#add a more succinct col
+meta <- meta %>%
+dplyr::mutate(Group = ifelse(meta$Location == "Italy:Toscany, Florence", "EU", "BF"))
+#remove location col now
+meta <- meta[,c(1,3)]
+#make the group a factor
+meta$Group <- factor(
+  meta$Group,
+  levels = c("EU", "BF")
+)
+
+meta
+```
+
+## Extract ASV Sequences
+
+```{r}
+seqs <- getSequences(seqtab_nochim)
+names(seqs) <- seqs
+```
+
+## Multiple Sequence Alignment
+
+```{r}
+#aligning every ASV to every other ASV
+dna <- DNAStringSet(seqs)
+alignment <- AlignSeqs(dna, anchor = NA)
+```
+
+## Convert Alignment
+
+## Build Initial Tree
+
+## Improve Tree
+
+## Root Tree
+
+Visualize
+
+## Build Phyloseq Object
+
+## Save Results
+
+```{r}
+#sequence alignment
+saveRDS(alignment, "../results/phylogeny/alignment.rds")
+#tree
+
+#phyloseq
+```
+
