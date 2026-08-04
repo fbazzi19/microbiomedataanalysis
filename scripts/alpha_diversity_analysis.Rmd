@@ -9,6 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Alpha diversity looks at the diversity of each sample.
+
 ## Load in Libraries and Set Working Directory
 
 ```{r, include=FALSE}
@@ -22,6 +24,70 @@ library(ggplot2)
 ## Load in Data
 
 ```{r}
+#filtered phyloseq -- could potentially see how results differ if I don't use the filtered version
+physeq_filt <- readRDS("../results/exploratory/phyloseq_filtered.rds")
+physeq <- readRDS("../results/phylogeny/phyloseq.rds") #going to stick with using unfiltered
+```
+
+## Calculate Diversity
+Observed is the number of detected ASVs, Shannon balances richness and evenness, Simpson emphasizes dominance.
+
+```{r}
+alpha <- estimate_richness(
+    physeq,
+    measures = c(
+        "Observed",
+        "Shannon",
+        "Simpson"
+    )
+)
+
+alpha
+```
+
+## Add in Metadata
+
+```{r}
+alpha$Sample <- rownames(alpha)
+
+alpha <- merge(
+    alpha,
+    data.frame(sample_data(physeq)),
+    by.x="Sample",
+    by.y="row.names"
+) #returns a warning because there are no singletons, expected
+```
+
+## Visualize
+
+```{r}
+#visualizing difference in Shannon scores
+alpha_diversity_plot <- ggplot(alpha,
+       aes(x=Group,
+           y=Shannon)) +
+    geom_boxplot() +
+    geom_jitter(width=0.1) +
+    theme_bw() +
+  labs(
+    title = "Alpha Diversity"
+  )
+alpha_diversity_plot
+```
+
+## Statistical Testing
+
+```{r}
+#nonparametric
+#p-val <0.05, difference in diversity between groups
+wilcox.test(
+    Shannon ~ Group,
+    data=alpha
+)
 
 ```
 
+## Save Results
+
+```{r}
+ggsave("../results/diversity/alpha_diversity.png", plot = alpha_diversity_plot)
+```

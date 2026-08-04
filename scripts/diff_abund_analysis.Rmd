@@ -1,0 +1,168 @@
+---
+title: "Differential Abundance"
+author: "Fateema Bazzi"
+date: "2026-08-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load in Libraries and Set Working Directory
+
+```{r, include=FALSE}
+setwd(this.path::here())
+
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+library(ANCOMBC)
+library(microbiome)
+library(RColorBrewer)
+library(ggrepel)
+```
+
+## Load in Data
+
+```{r}
+physeq <- readRDS("../results/phylogeny/phyloseq.rds")
+```
+
+## Create Genus-Level Object
+
+```{r}
+physeq_genus <- tax_glom(
+    physeq,
+    taxrank = "Genus"
+)
+#check how many taxa remain
+ntaxa(physeq_genus) #down from 2173
+#handle unknowns
+taxa_names(physeq_genus)[is.na(taxa_names(physeq_genus))] <- "Unclassified"
+```
+
+## ANCOM-BC
+
+```{r}
+#set control group
+sample_data(physeq_genus)$Group <- relevel(
+    sample_data(physeq_genus)$Group,
+    ref="EU"
+)
+
+#preserve taxon names
+taxa_names(physeq_genus) <- paste0(
+    "Genus_",
+    seq_len(ntaxa(physeq_genus))
+)
+tax_map <- data.frame(
+    Taxon_ID = taxa_names(physeq_genus),
+    as.data.frame(tax_table(physeq_genus))
+)
+
+da_results <- ancombc(
+    data = physeq_genus,
+    formula = "Group",
+    p_adj_method = "BH" #multiple testing correction
+)
+```
+Extract Log FC and Q-Vals
+```{r}
+lfc <- da_results$res$lfc
+qvals <- da_results$res$q_val
+```
+
+Filter out results with adjusted p-value>0.05 and |lfc|<1
+```{r}
+sig_taxa <- rownames(
+    da_results$res$q_val[
+        da_results$res$q_val[, "GroupBF"] < 0.05 &
+        abs(da_results$res$lfc[, "GroupBF"]) > 1,
+    ]
+)
+```
+
+## Differential Abundance Table
+```{r}
+da_table <- data.frame(
+    Taxon_ID = rownames(da_results$feature_table),
+    logFC = da_results$res$lfc[, "GroupBF"],
+    p_value = da_results$res$p_val[, "GroupBF"],
+    q_value = da_results$res$q_val[, "GroupBF"]
+)
+
+#add significance indication
+da_table$Significant <- 
+    da_table$q_value < 0.05 &
+    abs(da_table$logFC) > 1
+
+#add direction of differential abundance
+da_table$Direction <- ifelse(
+    da_table$logFC > 0,
+    "BF enriched",
+    "EU enriched"
+)
+
+# add taxonomy info
+tax_df <- as.data.frame(tax_table(physeq_genus))
+tax_df$Taxon_ID <- rownames(tax_df)
+
+da_table <- merge(
+    da_table,
+    tax_df,
+    by = "Taxon_ID",
+    all.x = TRUE
+)
+
+#add taxon column
+da_table$Taxon <- da_table$Genus
+
+#reorder
+da_table <- da_table[, c(
+    "Taxon",
+    "Phylum",
+    "Class",
+    "Order",
+    "Family",
+    "Genus",
+    "logFC",
+    "p_value",
+    "q_value",
+    "Significant",
+    "Direction",
+    "Taxon_ID"
+)]
+
+head(da_table)
+```
+
+## Visualize
+Volcano Plot
+```{r}
+#TODO: Refine
+myvolcanoplot <- ggplot(data = da_table, aes(x = logFC, y = -log10(q_value), col = Significant, shape = Direction, label=Taxon)) +
+  geom_vline(xintercept = c(-1, 1), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  geom_point()+
+  geom_text_repel(max.overlaps = Inf)
+myvolcanoplot
+```
+
+Heat Map
+```{r}
+
+```
+
+Bar Plot
+```{r}
+
+```
+
+## Save Results
+```{r}
+#differential abundance table
+saveRDS(da_table, "../results/differential_abundance/diff_abund_tbl.rds")
+write.csv(da_table, "../results/differential_abundance/diff_abund_tbl.csv")
+#visuals
+```

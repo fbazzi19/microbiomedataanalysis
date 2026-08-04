@@ -1,0 +1,142 @@
+---
+title: "Beta Diversity"
+author: "Fateema Bazzi"
+date: "2026-08-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Beta diversity looks at the differences in group composition.
+
+## Load in Libraries and Set Working Directory
+
+```{r, include=FALSE}
+setwd(this.path::here())
+
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+library(vegan)
+```
+
+## Load in Data
+
+```{r}
+#filtered phyloseq -- could potentially see how results differ if I don't use the filtered version
+physeq_filt <- readRDS("../results/exploratory/phyloseq_filtered.rds")
+physeq <- readRDS("../results/phylogeny/phyloseq.rds") #going to stick with using unfiltered
+```
+
+## Distance Metric
+
+```{r}
+#bray-curtis
+bray <- distance(
+    physeq,
+    method="bray"
+)
+#weighted unifrac
+wunifrac <- distance(
+    physeq,
+    method="wunifrac"
+)
+```
+
+## Ordination
+```{r}
+#could experiment with method parameter
+ord_bc <- ordinate(
+    physeq,
+    method="PCoA", #principal coordinate analysis, similar to PCA
+    distance=bray
+)
+
+ord_wuf <- ordinate(
+    physeq,
+    method="PCoA", #principal coordinate analysis, similar to PCA
+    distance=wunifrac
+)
+```
+Visualize
+```{r}
+ord_bc_df <- data.frame(
+  Sample = rownames(ord_bc$vectors),
+  Axis.1 = ord_bc$vectors[, 1],
+  Axis.2 = ord_bc$vectors[, 2]
+)
+
+ord_wuf_df <- data.frame(
+  Sample = rownames(ord_wuf$vectors),
+  Axis.1 = ord_wuf$vectors[, 1],
+  Axis.2 = ord_wuf$vectors[, 2]
+)
+
+meta_df <- data.frame(sample_data(physeq))
+meta_df$Sample <- rownames(meta_df)
+
+ord_bc_df <- merge(ord_bc_df, meta_df, by = "Sample")
+ord_wuf_df <- merge(ord_wuf_df, meta_df, by = "Sample")
+
+ord_bc_plot <- ggplot(ord_bc_df, aes(x = Axis.1, y = Axis.2, color = Group)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "PCoA 1",
+    y = "PCoA 2",
+    color = "Group"
+  )
+
+ord_wuf_plot <- ggplot(ord_wuf_df, aes(x = Axis.1, y = Axis.2, color = Group)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "PCoA 1",
+    y = "PCoA 2",
+    color = "Group"
+  )
+ord_bc_plot
+ord_wuf_plot
+```
+
+## Test Statistically
+```{r}
+#bray curtis
+#shows significance
+adonis2(
+    bray ~ Group,
+    data=data.frame(sample_data(physeq))
+)
+#check dispersion
+disp_bc <- betadisper(
+    bray,
+    sample_data(physeq)$Group
+)
+
+anova(disp_bc) #p is NOT sig. which is what we want
+
+#weighted unifrac
+adonis2(
+    wunifrac ~ Group,
+    data=data.frame(sample_data(physeq))
+) #sig
+#check dispersion
+disp_wuf <- betadisper(
+    wunifrac,
+    sample_data(physeq)$Group
+)
+
+anova(disp_wuf) #not sig
+```
+```{r}
+disp_bc_plot <- plot(disp_bc)
+disp_wuf_plot <- plot(disp_wuf)
+```
+
+## Save Results
+```{r}
+ggsave("../results/diversity/ordination_bc_plot.png", plot = ord_bc_plot)
+ggsave("../results/diversity/ordination_wuf_plot.png", plot = ord_wuf_plot)
+```
