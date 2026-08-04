@@ -37,22 +37,25 @@ taxa <- readRDS("../results/taxonomy/taxonomy.rds")
 Clean metadata
 ```{r}
 #metadata
-meta <- read.csv("../data/metadata/italiantable.csv", header = FALSE)
+meta <- read.csv("../data/metadata/italiantable.csv", header = FALSE, row.names = 1)
 
 #get rid of columns that aren't needed
-meta <- meta[,c(1,14)]
-colnames(meta)<-c("Sample", "Location")
+meta <- meta[, 13, drop = FALSE]
+colnames(meta)<-"Location"
 
 #add a more succinct col
 meta <- meta %>%
 dplyr::mutate(Group = ifelse(meta$Location == "Italy:Toscany, Florence", "EU", "BF"))
 #remove location col now
-meta <- meta[,c(1,3)]
+meta <- meta[,2, drop = FALSE]
 #make the group a factor
 meta$Group <- factor(
   meta$Group,
   levels = c("EU", "BF")
 )
+
+#reorder rows to match asv table
+meta <- meta[rownames(seqtab_nochim), , drop = FALSE]
 
 meta
 ```
@@ -60,29 +63,100 @@ meta
 ## Extract ASV Sequences
 
 ```{r}
-seqs <- getSequences(seqtab_nochim)
-names(seqs) <- seqs
+seqs <- getSequences(seqtab_nochim) #extracts sequences from DADA obj
+names(seqs) <- seqs #sets names to sequences
 ```
 
 ## Multiple Sequence Alignment
 
 ```{r}
 #aligning every ASV to every other ASV
-dna <- DNAStringSet(seqs)
-alignment <- AlignSeqs(dna, anchor = NA)
+dna <- DNAStringSet(seqs) #set of DNAString objects
+alignment <- AlignSeqs(dna, anchor = NA) #alignment of multiple unaligned sequences following guide tree
+#anchor=NA to prevent potential bias, no noticable slowdown bc dataset is quite small
 ```
 
 ## Convert Alignment
 
-## Build Initial Tree
+```{r}
+#convert into format recognized by phangorn package, phyDat obj
+phang_align <- phyDat(as(alignment,
+                         "matrix"),
+                      type = "DNA")
+```
 
-## Improve Tree
+## Build Tree
+Neighbor Joining
+```{r}
+#compute distances
+dm <- dist.ml(phang_align) #uses DNA seq to compute distances
+
+#neighbor joining tree estimation (weighted)
+tree_nj <- NJ(dm)
+
+```
+
+Maximum likelihood
+```{r}
+#compute the likelihood of tree given sequence alignment, returns model
+fit <- pml(tree_nj,
+           data = phang_align)
+
+#set random seed for reproducibility
+set.seed(42)
+
+#optimize model parameters --TAKES ABOUT 30 MIN
+fit_optimized <- optim.pml(
+    fit,
+    model = "GTR", #GTR widely used for 16s rRNA
+    optInv = TRUE, #option to optimize invariant proportion
+    optGamma = TRUE, #option to optimize gamma rate
+    rearrangement = "stochastic", #broader, but smaller dataset justifies it
+    control = pml.control(trace = 0) #suppress output
+)
+```
 
 ## Root Tree
 
+```{r}
+#using standard midpoint rooting
+tree <- midpoint(fit_optimized$tree)
+```
+
 Visualize
+```{r}
+#unreadable, expected
+plot.phylo(tree)
+
+```
 
 ## Build Phyloseq Object
+
+```{r}
+#operational taxonomic unit, converting format of ASV table for phyloseq
+otu <- otu_table(seqtab_nochim, taxa_are_rows = FALSE)
+
+#covert taxa
+tax <- tax_table(as.matrix(taxa))
+
+tree_phylo <- phy_tree(tree)
+
+sample_meta <- sample_data(meta)
+
+physeq <- phyloseq(
+    otu,
+    tax,
+    tree_phylo,
+    sample_meta
+)
+```
+
+```{r}
+#sanity check
+physeq
+sample_names(physeq) == rownames(meta)
+all(taxa_names(physeq) %in% rownames(taxa))
+```
 
 ## Save Results
 
@@ -90,7 +164,9 @@ Visualize
 #sequence alignment
 saveRDS(alignment, "../results/phylogeny/alignment.rds")
 #tree
-
+saveRDS(tree, "../results/phylogeny/tree.rds")
+write.tree(tree,"../results/phylogeny/tree.nwk")
 #phyloseq
+saveRDS(physeq, "../results/phylogeny/phyloseq.rds")
 ```
 

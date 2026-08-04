@@ -44,7 +44,6 @@ filts <- file.path(path, "filtered", paste0(sample_names, "_filt.fastq.gz"))
 names(filts) <- sample_names
 
 #trunclen determined by previous multiqc and quality profile
-#TODO : play w maxEE and trunclen
 out <- filterAndTrim(fastqs, filts, truncLen=c(250),
               maxN=0, maxEE=2, truncQ=2, rm.phix=TRUE,
               compress=TRUE) 
