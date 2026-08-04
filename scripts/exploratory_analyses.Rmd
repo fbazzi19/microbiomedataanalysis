@@ -197,6 +197,20 @@ prev_abund_plot <- ggplot(prev_abund,
 prev_abund_plot
 ```
 
+## Filtering
+Rare taxa
+```{r}
+#removing ASVs present in only one sample
+physeq_filtered <- filter_taxa(
+    physeq,
+    function(x) {
+        sum(x > 0) > 1 
+    },
+    TRUE
+)
+physeq_filtered #taxa decreases from 2173 to 522
+```
+
 ## Save Results
 
 ```{r}
@@ -224,11 +238,11 @@ prevalence_table <- data.frame(
     Prevalence = prevalence,
     TotalAbundance = abund
 )
-
 prevalence_table <-cbind(prevalence_table, taxonomy)
 saveRDS(prevalence_table, "../results/exploratory/asv_prevalence.rds")
 write.csv(prevalence_table, "../results/exploratory/asv_prevalence.csv")
-
+#filtered physeq
+saveRDS(physeq_filtered, "../results/exploratory/phyloseq_filtered.rds")
 #visuals
 ggsave("../results/exploratory/sequencing_depth_grouped.png", plot= seq_depth_plot)
 ggsave("../results/exploratory/asv_richness.png", plot= observed_asvs_plot)
