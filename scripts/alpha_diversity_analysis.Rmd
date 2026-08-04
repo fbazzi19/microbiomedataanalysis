@@ -1,0 +1,27 @@
+---
+title: "Alpha Diversity"
+author: "Fateema Bazzi"
+date: "2026-08-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load in Libraries and Set Working Directory
+
+```{r, include=FALSE}
+setwd(this.path::here())
+
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+```
+
+## Load in Data
+
+```{r}
+
+```
+
