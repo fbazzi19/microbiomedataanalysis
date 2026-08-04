@@ -243,7 +243,7 @@ saveRDS(track, "../results/dada2/track_reads.rds")
 write.csv(track, "../results/dada2/track_reads.csv")
 
 #visuals
-ggsave("../results/dada2/quality_profiles.png", plot= qual_profs, width = 12, height = 10, units = "in",)
+ggsave("../results/dada2/quality_profiles.png", plot= qual_profs, width = 12, height = 10, units = "in")
 ggsave("../results/dada2/retention_bar.png", plot= retention_bar)
 ggsave("../results/dada2/retention_percent_bar.png", plot= retention_per_bar)
 ggsave("../results/dada2/sequencing_depth_distibution.png", plot= seq_depth_plot)

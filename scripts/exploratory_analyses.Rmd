@@ -1,0 +1,242 @@
+---
+title: "Exploratory Analyses"
+author: "Fateema Bazzi"
+date: "2026-08-04"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load in Libraries and Set Working Directory
+
+```{r, include=FALSE}
+setwd(this.path::here())
+
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+```
+
+## Load in Data
+
+```{r}
+#phyloseq object
+physeq <- readRDS("../results/phylogeny/phyloseq.rds")
+```
+
+## Sequencing Depth
+
+```{r}
+#total reads per sample
+sample_sums(physeq)
+```
+Visualize
+```{r}
+#data frame of depth
+depth_df <- data.frame(
+  Sample = sample_names(physeq),
+  Reads = sample_sums(physeq)
+)
+
+#add grouping
+depth_df$Group <- sample_data(physeq)$Group
+
+#plot
+seq_depth_plot <- ggplot(depth_df, aes(x = reorder(Sample, Reads), y = Reads, fill = Group)) +
+  geom_col() +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  ) +
+  labs(
+    x = "Sample",
+    y = "Total Reads",
+    title = "Sequencing Depth per Sample"
+  )
+seq_depth_plot #we did already create a similar plot once before, but now it's colored by group
+```
+
+## ASV Richness
+
+```{r}
+#calculate observed ASVs
+asv_richness <- apply(otu_table(physeq), 1, function(x) sum(x > 0))
+```
+Visulaize
+```{r}
+richness_df <- data.frame(
+  Sample = names(asv_richness),
+  ASVs = asv_richness
+)
+#plot
+observed_asvs_plot <- ggplot(richness_df, aes(x = reorder(Sample, ASVs), y = ASVs)) +
+  geom_col() +
+  coord_flip() +
+  theme_bw() +
+  labs(
+    x = "Sample",
+    y = "Observed ASVs"
+  )
+observed_asvs_plot
+
+#grouped
+richness_df_grouped <- data.frame(
+  Sample = names(asv_richness),
+  ASVs = asv_richness
+)
+#add grouping
+richness_df_grouped$Group <- sample_data(physeq)$Group
+#plot
+observed_asvs_grouped_plot <- ggplot(richness_df_grouped, aes(x = Group, y = ASVs)) +
+  geom_col() +
+  coord_flip() +
+  theme_bw() +
+  labs(
+    x = "Sample",
+    y = "Observed ASVs"
+  )
+observed_asvs_grouped_plot #just observing visually, will test statistically later
+```
+
+## Relative Abundance
+
+```{r}
+#convert raw counts to proportions
+physeq_rel <- transform_sample_counts(physeq, function(x) x / sum(x))
+#sanity check
+sample_sums(physeq_rel)
+```
+Collapse to Phylum and Visualize
+```{r}
+physeq_phylum <- tax_glom(
+  physeq_rel,
+  taxrank = "Phylum"
+)
+#plot
+phylum_abundance <- plot_bar(physeq_phylum, fill="Phylum")
+phylum_abundance
+
+#Grouped
+phylum_abundance_grouped <- plot_bar(physeq_phylum, fill="Phylum") + 
+  facet_grid(~Group, scales = "free_x", space = "free_x")
+phylum_abundance_grouped
+```
+Collapse to Genus and Visualize
+```{r}
+physeq_genus <- tax_glom(
+  physeq_rel,
+  taxrank = "Genus"
+)
+#plot
+genus_abundance <- plot_bar(physeq_genus, fill="Genus") #too many different genus to be visually informative
+genus_abundance
+#subset only the top 20
+top_genus <- names(
+  sort(
+    taxa_sums(physeq_genus),
+    decreasing=TRUE
+  )[1:20]
+)
+physeq_top <- prune_taxa(
+  top_genus,
+  physeq_genus
+)
+#plot
+top_genus_abundance <- plot_bar(physeq_top, fill="Genus")
+top_genus_abundance
+
+#Grouped
+top_genus_abundance_grouped <- plot_bar(physeq_top, fill="Genus") + 
+  facet_grid(~Group, scales = "free_x", space = "free_x")
+top_genus_abundance_grouped
+```
+
+## ASV Prevalence
+
+```{r}
+otu <- as(otu_table(physeq), "matrix")
+#counting occurrence of each ASV
+prevalence <- apply(otu, 2, function(x) sum(x > 0))
+
+head(prevalence)
+```
+Visualize
+```{r}
+prev_df <- data.frame(
+  ASV = names(prevalence),
+  SamplesDetected = prevalence
+)
+
+prev_plot <- ggplot(prev_df,
+       aes(x=SamplesDetected)) +
+  geom_histogram(binwidth=1) +
+  theme_bw() +
+  labs(
+    x="Number of samples containing ASV",
+    y="Number of ASVs"
+  )
+prev_plot #visually, there doesn't seem to be a high prevalence
+```
+Prevalence and Abundance Combined
+```{r}
+abund <- taxa_sums(physeq)
+
+prev_abund <- data.frame(
+  Abundance = abund,
+  Prevalence = prevalence
+)
+
+prev_abund_plot <- ggplot(prev_abund,
+       aes(x=Prevalence,
+           y=Abundance)) +
+  geom_point() +
+  scale_y_log10() +
+  theme_bw()
+prev_abund_plot
+```
+
+## Save Results
+
+```{r}
+#read depth table
+saveRDS(depth_df, "../results/exploratory/sample_read_depth.rds")
+write.csv(depth_df, "../results/exploratory/sample_read_depth.csv")
+#richness table
+saveRDS(richness_df_grouped, "../results/exploratory/sample_asv_richness.rds")
+write.csv(richness_df_grouped, "../results/exploratory/sample_asv_richness.csv")
+#relative abundance
+#phylum
+phylum_rel <- as(otu_table(physeq_phylum), "matrix")
+phylum_rel <- as.data.frame(phylum_rel)
+saveRDS(phylum_rel, "../results/exploratory/phylum_relative_abundance.rds")
+write.csv(phylum_rel, "../results/exploratory/phylum_relative_abundance.csv")
+#genus
+genus_rel <- as(otu_table(physeq_genus), "matrix")
+genus_rel <- as.data.frame(genus_rel)
+saveRDS(genus_rel, "../results/exploratory/genus_relative_abundance.rds")
+write.csv(genus_rel, "../results/exploratory/genus_relative_abundance.csv")
+#prevalence table
+taxonomy <- as.data.frame(tax_table(physeq))
+prevalence_table <- data.frame(
+    ASV = names(prevalence),
+    Prevalence = prevalence,
+    TotalAbundance = abund
+)
+
+prevalence_table <-cbind(prevalence_table, taxonomy)
+saveRDS(prevalence_table, "../results/exploratory/asv_prevalence.rds")
+write.csv(prevalence_table, "../results/exploratory/asv_prevalence.csv")
+
+#visuals
+ggsave("../results/exploratory/sequencing_depth_grouped.png", plot= seq_depth_plot)
+ggsave("../results/exploratory/asv_richness.png", plot= observed_asvs_plot)
+ggsave("../results/exploratory/asv_richness_grouped.png", plot= observed_asvs_grouped_plot)
+ggsave("../results/exploratory/phylum_abundance.png", plot= phylum_abundance, width = 12, height = 10, units = "in")
+ggsave("../results/exploratory/phylum_abundance_grouped.png", plot= phylum_abundance_grouped, width = 12, height = 10, units = "in")
+ggsave("../results/exploratory/top_genus_abundance.png", plot= top_genus_abundance, width = 12, height = 10, units = "in")
+ggsave("../results/exploratory/top_genus_abundance_grouped.png", plot= top_genus_abundance_grouped, width = 12, height = 10, units = "in")
+ggsave("../results/exploratory/prevalence.png", plot= prev_plot)
+ggsave("../results/exploratory/prevalence_v_abundance.png", plot= prev_abund_plot)
+```
