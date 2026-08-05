@@ -19,6 +19,7 @@ setwd(this.path::here())
 library(tidyverse)
 library(phyloseq)
 library(ggplot2)
+library(ggstatsplot)
 ```
 
 ## Load in Data
@@ -63,15 +64,18 @@ alpha <- merge(
 
 ```{r}
 #visualizing difference in Shannon scores
-alpha_diversity_plot <- ggplot(alpha,
-       aes(x=Group,
-           y=Shannon)) +
-    geom_boxplot() +
-    geom_jitter(width=0.1) +
-    theme_bw() +
-  labs(
-    title = "Alpha Diversity"
-  )
+alpha_diversity_plot <- ggbetweenstats(
+  data = alpha,
+  x = Group,
+  y = Shannon
+) +
+  theme(
+    axis.ticks = element_blank(),
+    axis.line = element_line(colour = "grey50"),
+    panel.grid = element_line(color = "#b4aea9"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(linetype = "dashed"))
 alpha_diversity_plot
 ```
 
@@ -90,5 +94,5 @@ wilcox.test(
 ## Save Results
 
 ```{r}
-ggsave("../results/diversity/alpha_diversity.png", plot = alpha_diversity_plot)
+ggsave("../results/diversity/alpha_diversity.png", plot = alpha_diversity_plot, width = 12, height = 10, units = "in")
 ```
