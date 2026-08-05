@@ -38,6 +38,7 @@ alpha <- estimate_richness(
     measures = c(
         "Observed",
         "Shannon",
+        "Chao1",
         "Simpson"
     )
 )
