@@ -206,7 +206,7 @@ diff_abund_barplot
 saveRDS(da_table, "../results/differential_abundance/diff_abund_tbl.rds")
 write.csv(da_table, "../results/differential_abundance/diff_abund_tbl.csv")
 #visuals
-ggsave("../results/differential_abundance/diff_abund_volcano.png", plot = diff_abund_volcano,width = 12, height = 10, units = "in")
+ggsave("../results/differential_abundance/diff_abund_volcano.png", plot = diff_abund_volcano,width = 18, height = 12, units = "in")
 ggsave("../results/differential_abundance/abund_heatmap.png", plot = abund_heatmap, width = 12, height = 10, units = "in")
 ggsave("../results/differential_abundance/diff_abund_barplot.png", plot = diff_abund_barplot, width = 12, height = 10, units = "in")
 ```
