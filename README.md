@@ -1,5 +1,5 @@
 # Analysis of 16S rRNA Microbial Community Sequencing Data
-An end-to-end microbiome study analyzing publicly available 16S rRNA sequencing data comparing the gut microbiota of children from Europe and rural Burkina Faso
+An end-to-end microbiome study analyzing publicly available 16S rRNA sequencing data comparing the gut microbiota of children from Europe and rural Burkina Faso. The report to go with this project is available here in pdf format.
 
 ## Environment Retrieval
 All packages and session information was documented using Conda. The environment is available here as `microbiomeenv.yml`, and can be created using `conda create --file microbiomeenv.yml`
