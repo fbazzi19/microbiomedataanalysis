@@ -2,7 +2,7 @@
 An end-to-end microbiome study analyzing publicly available 16S rRNA sequencing data comparing the gut microbiota of children from Europe and rural Burkina Faso
 
 ## Environment Retrieval
-All packages and session information was documented using Conda. The environment is available here as (insert), and can be created using `conda create --file environment.yml`
+All packages and session information was documented using Conda. The environment is available here as `microbiomeenv.yml`, and can be created using `conda create --file microbiomeenv.yml`
 
 ## Data Availability
 The data used in this project is publicly available [here.](https://www.ebi.ac.uk/ena/browser/view/ERP000133?show=publications)
